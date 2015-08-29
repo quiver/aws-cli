@@ -23,7 +23,7 @@ from awscli.customizations.s3.comparator import Comparator
 from awscli.customizations.s3.fileinfobuilder import FileInfoBuilder
 from awscli.customizations.s3.fileformat import FileFormat
 from awscli.customizations.s3.filegenerator import FileGenerator
-from awscli.customizations.s3.fileinfo import TaskInfo, FileInfo
+from awscli.customizations.s3.fileinfo import TaskInfo, FileInfo, URLInfo
 from awscli.customizations.s3.filters import create_filter
 from awscli.customizations.s3.s3handler import S3Handler, S3StreamHandler
 from awscli.customizations.s3.utils import find_bucket_key, uni_print, \
@@ -570,6 +570,13 @@ class RmCommand(S3TransferCommand):
                   'synopsis': USAGE}, DRYRUN, QUIET, RECURSIVE, INCLUDE,
                  EXCLUDE, ONLY_SHOW_ERRORS, PAGE_SIZE]
 
+class UrlCommand(S3TransferCommand):
+    NAME = 'url'
+    DESCRIPTION = "generate presigned url"
+    USAGE = "<S3Path>"
+    ARG_TABLE = [{'name': 'paths', 'nargs': 1, 'positional_arg': True,
+                  'synopsis': USAGE}, EXPIRES]
+
 
 class SyncCommand(S3TransferCommand):
     NAME = 'sync'
@@ -660,7 +667,7 @@ class CommandArchitecture(object):
         self.instructions.append('s3_handler')
 
     def needs_filegenerator(self):
-        if self.cmd in ['mb', 'rb'] or self.parameters['is_stream']:
+        if self.cmd in ['mb', 'rb', 'url'] or self.parameters['is_stream']:
             return False
         else:
             return True
@@ -729,7 +736,8 @@ class CommandArchitecture(object):
         cmd_translation['s3'] = {
             'rm': 'delete',
             'mb': 'make_bucket',
-            'rb': 'remove_bucket'
+            'rb': 'remove_bucket',
+            'url': 'generate_url'
         }
         result_queue = queue.Queue()
         operation_name = cmd_translation[paths_type][self.cmd]
@@ -746,6 +754,10 @@ class CommandArchitecture(object):
                              src_type='s3',
                              operation_name=operation_name,
                              client=self._client)]
+        urlinfo = [URLInfo(src=files['src']['path'],
+                           src_type='s3',
+                           operation_name=operation_name,
+                           client=self._client)]
         stream_dest_path, stream_compare_key = find_dest_path_comp_key(files)
         stream_file_info = [FileInfo(src=files['src']['path'],
                                      dest=stream_dest_path,
@@ -788,6 +800,12 @@ class CommandArchitecture(object):
             command_dict = {'setup': [files],
                             'file_generator': [file_generator],
                             'filters': [create_filter(self.parameters)],
+                            'file_info_builder': [file_info_builder],
+                            's3_handler': [s3handler]}
+        elif self.cmd == 'url':
+            command_dict = {'setup': [urlinfo],
+                            'file_generator': [file_generator],
+                            #'filters': [create_filter(self.parameters)],
                             'file_info_builder': [file_info_builder],
                             's3_handler': [s3handler]}
         elif self.cmd == 'mv':
@@ -856,7 +874,7 @@ class CommandParameters(object):
             self.parameters['follow_symlinks'] = True
         if 'source_region' not in parameters:
             self.parameters['source_region'] = None
-        if self.cmd in ['sync', 'mb', 'rb']:
+        if self.cmd in ['sync', 'mb', 'rb', 'url']:
             self.parameters['dir_op'] = True
 
     def add_paths(self, paths):
@@ -922,7 +940,7 @@ class CommandParameters(object):
         template_type = {'s3s3': ['cp', 'sync', 'mv'],
                          's3local': ['cp', 'sync', 'mv'],
                          'locals3': ['cp', 'sync', 'mv'],
-                         's3': ['mb', 'rb', 'rm'],
+                         's3': ['mb', 'rb', 'rm', 'url'],
                          'local': [], 'locallocal': []}
         paths_type = ''
         usage = "usage: aws s3 %s %s" % (self.cmd,

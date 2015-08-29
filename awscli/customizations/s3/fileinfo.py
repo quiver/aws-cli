@@ -137,6 +137,34 @@ class TaskInfo(object):
         bucket, key = find_bucket_key(self.src)
         self.client.delete_bucket(Bucket=bucket)
 
+class URLInfo(TaskInfo):
+    """
+    This is a child object of the ``TaskInfo`` object.
+
+    """
+    def __init__(self, src, src_type, operation_name, client, expires=None):
+        super(URLInfo, self).__init__(src, src_type=src_type,
+                                       operation_name=operation_name,
+                                       client=client)
+        self.expires = expires
+
+    def generate_url(self):
+        """
+        This operation generates a presigned url
+        """
+
+        # due to subcommand.py def _normalize_s3_trailing_slash(self, paths):
+        self.src  = self.src[:-1] # FIXME : somehow '/' is added to the end of self.src
+        bucket, key = find_bucket_key(self.src)
+
+        if self.expires:
+            presigned_url = self.client.generate_presigned_url(
+                'get_object', Params={'Bucket': bucket, 'Key': key}, ExpiresIn=self.expires)
+        else:
+            presigned_url = self.client.generate_presigned_url(
+                'get_object', Params={'Bucket': bucket, 'Key': key})
+
+        uni_print(presigned_url) # TODO : how to print signed url
 
 class FileInfo(TaskInfo):
     """
