@@ -13,7 +13,8 @@
 from awscli.customizations import utils
 from awscli.customizations.commands import BasicCommand
 from awscli.customizations.s3.subcommands import ListCommand, WebsiteCommand, \
-    CpCommand, MvCommand, RmCommand, SyncCommand, MbCommand, RbCommand
+    CpCommand, MvCommand, RmCommand, SyncCommand, MbCommand, RbCommand, \
+    UrlCommand
 from awscli.customizations.s3.syncstrategy.register import \
     register_sync_strategies
 
@@ -52,6 +53,7 @@ class S3(BasicCommand):
     SYNOPSIS = "aws s3 <Command> [<Arg> ...]"
     SUBCOMMANDS = [
         {'name': 'ls', 'command_class': ListCommand},
+        {'name': 'url', 'command_class': UrlCommand}
         {'name': 'website', 'command_class': WebsiteCommand},
         {'name': 'cp', 'command_class': CpCommand},
         {'name': 'mv', 'command_class': MvCommand},

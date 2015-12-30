@@ -10,6 +10,7 @@
 # distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
 # ANY KIND, either express or implied. See the License for the specific
 # language governing permissions and limitations under the License.
+from functools import partial
 import os
 import sys
 
@@ -390,6 +391,32 @@ IGNORE_GLACIER_WARNINGS = {
     )
 }
 
+CLIENT_METHOD = {
+    'name': 'client-method',
+    'required': True,
+    'help_text': (
+        'The client method to presign for'
+    )
+}
+
+HTTP_METHOD = {
+    'name': 'http-method',
+    'choices': ['GET', 'POST', 'PUT'],
+    'help_text': (
+        'The http method to use on the generated url. By default, '
+        'the http method is whatever is used in the method\'s model.'
+    )
+}
+
+EXPIRES_IN = {
+    'name': 'expires-in',
+    'default': 3600,
+    'cli_type_name': 'integer',
+    'help_text': (
+        'The number of seconds the presigned url is valid for. '
+        'By default it expires in an hour (3600 seconds)'
+    )
+}
 
 TRANSFER_ARGS = [DRYRUN, QUIET, INCLUDE, EXCLUDE, ACL,
                  FOLLOW_SYMLINKS, NO_FOLLOW_SYMLINKS, NO_GUESS_MIME_TYPE,
@@ -406,13 +433,42 @@ def get_client(session, region, endpoint_url, verify, config=None):
                                  endpoint_url=endpoint_url, verify=verify,
                                  config=config)
 
-
 class S3Command(BasicCommand):
     def _run_main(self, parsed_args, parsed_globals):
         self.client = get_client(self._session, parsed_globals.region,
                                  parsed_globals.endpoint_url,
                                  parsed_globals.verify_ssl)
 
+class UrlCommand(S3Command):
+    NAME = 'url'
+    DESCRIPTION = ('Generate a presigned url given a client, its method, and '
+                   'arguments')
+    USAGE = '<S3Uri>'
+    ARG_TABLE = [{'name': 'paths', 'positional_arg': True,
+                  'synopsis': USAGE}, CLIENT_METHOD, HTTP_METHOD, EXPIRES_IN]
+
+    def __init__(self, session, stream=sys.stdout):
+        super(UrlCommand, self).__init__(session)
+        self._stream = stream
+
+    def _run_main(self, parsed_args, parsed_globals):
+        super(UrlCommand, self)._run_main(parsed_args, parsed_globals)
+        if not parsed_args.paths.startswith('s3://'):
+            raise ValueError('Please specify a valid S3 key.'
+                             ' E.g. s3://BUCKET_NAME/PATH/TO/KEY')
+        bucket, key = find_bucket_key(parsed_args.paths[5:])
+
+        s3 = self._session.create_client('s3')
+        if parsed_args.http_method:
+            func = partial(s3.generate_presigned_url, HttpMethod = parsed_args.http_method)
+        else:
+            func = s3.generate_presigned_url
+        url = func(
+          ClientMethod = parsed_args.client_method,
+          Params = {'Bucket': bucket, 'Key': key},
+          ExpiresIn = parsed_args.expires_in,
+          )
+        self._stream.write(url + '\n')
 
 class ListCommand(S3Command):
     NAME = 'ls'
